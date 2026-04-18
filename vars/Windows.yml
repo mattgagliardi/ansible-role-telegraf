@@ -1,0 +1,5 @@
+---
+# vars/Windows.yml — Windows-specific Telegraf variables
+
+telegraf_win_install_dir: "C:\\Program Files\\InfluxData\\telegraf"
+telegraf_win_config_file: "C:\\Program Files\\InfluxData\\telegraf\\telegraf.conf"

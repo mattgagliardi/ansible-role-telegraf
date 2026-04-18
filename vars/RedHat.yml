@@ -1,0 +1,6 @@
+---
+# vars/RedHat.yml — RedHat/CentOS/Rocky-specific Telegraf repository variables
+
+telegraf_repo_baseurl: 'https://repos.influxdata.com/stable/$basearch/main'
+telegraf_repo_gpgkey: "https://repos.influxdata.com/influxdata-archive.key"
+telegraf_package: "telegraf"

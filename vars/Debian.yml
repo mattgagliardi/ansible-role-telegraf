@@ -1,0 +1,6 @@
+---
+# vars/Debian.yml — Debian/Ubuntu-specific Telegraf repository variables
+
+telegraf_repo_url: "https://repos.influxdata.com/debian"
+telegraf_repo_key_url: "https://repos.influxdata.com/influxdata-archive.key"
+telegraf_package: "telegraf"

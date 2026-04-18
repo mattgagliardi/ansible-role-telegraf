@@ -1,0 +1,46 @@
+---
+# tasks/windows.yml — Windows-specific Telegraf tasks
+
+# Step A: Determine the latest Telegraf version
+- name: Query GitHub releases API for latest Telegraf version
+  ansible.builtin.uri:
+    url: "https://api.github.com/repos/influxdata/telegraf/releases/latest"
+    return_content: true
+    headers:
+      Accept: "application/vnd.github.v3+json"
+  register: _telegraf_github_release
+  delegate_to: localhost
+  run_once: true
+  no_log: false
+
+- name: Set telegraf_win_version fact
+  ansible.builtin.set_fact:
+    telegraf_win_version: "{{ _telegraf_github_release.json.tag_name | regex_replace('^v', '') }}"
+
+# Step B: Download the MSI
+- name: Download Telegraf MSI installer
+  ansible.windows.win_get_url:
+    url: "https://dl.influxdata.com/telegraf/releases/telegraf-{{ telegraf_win_version }}_windows_amd64.msi"
+    dest: "C:\\Windows\\Temp\\telegraf.msi"
+    force: false
+
+# Step C: Install the MSI
+- name: Install Telegraf via MSI
+  ansible.windows.win_package:
+    path: "C:\\Windows\\Temp\\telegraf.msi"
+    state: present
+    creates_service: telegraf
+
+# Step D: Deploy config
+- name: Deploy Telegraf configuration
+  ansible.windows.win_template:
+    src: telegraf.conf.windows.j2
+    dest: "{{ telegraf_win_config_file }}"
+  notify: "Restart telegraf on Windows"
+
+# Step E: Manage the service
+- name: Manage Telegraf Windows service
+  ansible.windows.win_service:
+    name: telegraf
+    start_mode: "{{ 'auto' if telegraf_service_enabled else 'disabled' }}"
+    state: "{{ 'started' if telegraf_service_enabled else 'stopped' }}"

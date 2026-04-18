@@ -1,0 +1,70 @@
+# Managed by Ansible — do not edit manually.
+# Role: telegraf  |  Template: telegraf.conf.windows.j2
+
+###############################################################################
+# [agent] — Global agent settings
+###############################################################################
+[agent]
+  interval          = "{{ telegraf_agent_interval }}"
+  round_interval    = true
+  metric_batch_size = 1000
+  metric_buffer_limit = 10000
+  collection_jitter = "0s"
+  flush_interval    = "{{ telegraf_agent_flush_interval }}"
+  flush_jitter      = "0s"
+  precision         = "0s"
+  hostname          = ""
+  omit_hostname     = false
+
+###############################################################################
+# OUTPUTS
+###############################################################################
+{% if telegraf_outputs | length > 0 %}
+{% for output in telegraf_outputs %}
+[[outputs.{{ output.plugin }}]]
+{{ output.config | indent(2, first=true) }}
+{% endfor %}
+{% else %}
+# No outputs configured — writing to NUL so telegraf starts cleanly.
+# Override telegraf_outputs in your playbook to ship metrics to a real backend.
+[[outputs.file]]
+  files = ["NUL"]
+{% endif %}
+
+###############################################################################
+# INPUTS — Windows performance counters
+###############################################################################
+[[inputs.win_perf_counters]]
+
+  [[inputs.win_perf_counters.object]]
+    ObjectName = "Processor"
+    Counters = ["% Processor Time"]
+    Instances = ["_Total"]
+    Measurement = "win_cpu"
+
+  [[inputs.win_perf_counters.object]]
+    ObjectName = "Memory"
+    Counters = ["Available Bytes", "% Committed Bytes In Use"]
+    Instances = ["------"]
+    Measurement = "win_mem"
+
+  [[inputs.win_perf_counters.object]]
+    ObjectName = "LogicalDisk"
+    Counters = ["% Free Space", "Disk Reads/sec", "Disk Writes/sec"]
+    Instances = ["*"]
+    Measurement = "win_disk"
+
+  [[inputs.win_perf_counters.object]]
+    ObjectName = "Network Interface"
+    Counters = ["Bytes Sent/sec", "Bytes Received/sec"]
+    Instances = ["*"]
+    Measurement = "win_net"
+
+[[inputs.win_services]]
+
+###############################################################################
+# INPUTS — extra (caller-supplied)
+###############################################################################
+{% for extra in telegraf_inputs_extra %}
+{{ extra }}
+{% endfor %}

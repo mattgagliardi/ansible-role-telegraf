@@ -1,0 +1,35 @@
+---
+# defaults/main.yml — telegraf role default variables
+# All variables here can be overridden in the calling playbook/inventory.
+
+# Whether the Telegraf service should be enabled and started at boot.
+telegraf_service_enabled: true
+
+# How often the agent collects metrics (default: 10s).
+telegraf_agent_interval: "10s"
+
+# How often the agent flushes metrics to outputs (default: 10s).
+telegraf_agent_flush_interval: "10s"
+
+# List of output plugin dicts. Each dict has keys:
+#   plugin: <telegraf plugin name>
+#   config: <raw TOML config lines as a string>
+# If empty, telegraf writes to /dev/null so the service starts cleanly.
+# Example:
+#   telegraf_outputs:
+#     - plugin: influxdb_v2
+#       config: |
+#         urls = ["https://influxdb.example.com:8086"]
+#         token = "mytoken"
+#         organization = "myorg"
+#         bucket = "telegraf"
+telegraf_outputs: []
+
+# Additional input plugin blocks (raw TOML strings) appended after the default set.
+# Example:
+#   telegraf_inputs_extra:
+#     - |
+#       [[inputs.exec]]
+#         commands = ["/usr/local/bin/my-collector.sh"]
+#         data_format = "influx"
+telegraf_inputs_extra: []

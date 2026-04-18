@@ -1,0 +1,32 @@
+---
+galaxy_info:
+  author: mattgagliardi
+  role_name: telegraf
+  description: >
+    Installs and configures the Telegraf metrics agent on Linux
+    (Debian/Ubuntu and Red Hat/Rocky/RHEL) and Windows Server endpoints.
+  license: MIT
+  min_ansible_version: "2.12"
+
+  platforms:
+    - name: Ubuntu
+      versions:
+        - jammy    # 22.04
+        - noble    # 24.04
+    - name: EL
+      versions:
+        - "8"
+        - "9"
+    - name: Windows
+      versions:
+        - all
+
+  galaxy_tags:
+    - telegraf
+    - monitoring
+    - metrics
+    - influxdata
+    - linux
+    - windows
+
+dependencies: []

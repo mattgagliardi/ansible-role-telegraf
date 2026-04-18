@@ -1,0 +1,111 @@
+---
+# tasks/linux.yml — Linux-specific Telegraf tasks
+
+# ── Debian/Ubuntu: add InfluxData apt repository ──────────────────────────────
+
+- name: Install apt prerequisites for InfluxData repo
+  ansible.builtin.apt:
+    name:
+      - gnupg
+      - apt-transport-https
+    state: present
+    update_cache: true
+  become: true
+  when: ansible_facts['os_family'] == 'Debian'
+
+- name: Ensure /etc/apt/trusted.gpg.d directory exists
+  ansible.builtin.file:
+    path: /etc/apt/trusted.gpg.d
+    state: directory
+    mode: '0755'
+  become: true
+  when: ansible_facts['os_family'] == 'Debian'
+
+- name: Download ASCII-armored InfluxData GPG key
+  ansible.builtin.get_url:
+    url: "{{ telegraf_repo_key_url }}"
+    dest: /tmp/influxdata-archive.asc
+    mode: '0644'
+  become: true
+  when: ansible_facts['os_family'] == 'Debian'
+
+- name: Dearmor InfluxData GPG key to binary format
+  ansible.builtin.command:
+    cmd: gpg --dearmor -o /etc/apt/trusted.gpg.d/influxdata-archive.gpg /tmp/influxdata-archive.asc
+    creates: /etc/apt/trusted.gpg.d/influxdata-archive.gpg
+  become: true
+  when: ansible_facts['os_family'] == 'Debian'
+
+- name: Add InfluxData apt repository
+  ansible.builtin.template:
+    src: influxdata.list.j2
+    dest: /etc/apt/sources.list.d/influxdata.list
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+  when: ansible_facts['os_family'] == 'Debian'
+  notify: Update apt cache
+  tags:
+    - molecule-idempotence-notest
+
+- name: Flush handlers to update apt cache before package install
+  ansible.builtin.meta: flush_handlers
+
+# ── RedHat/Rocky/RHEL: add InfluxData yum/dnf repository ─────────────────────
+
+- name: Download InfluxData GPG key (RedHat)
+  ansible.builtin.get_url:
+    url: "{{ telegraf_repo_gpgkey }}"
+    dest: /etc/pki/rpm-gpg/RPM-GPG-KEY-influxdata
+    mode: '0644'
+  become: true
+  when: ansible_facts['os_family'] == 'RedHat'
+
+- name: Import InfluxData GPG key from local file (RedHat)
+  ansible.builtin.rpm_key:
+    key: /etc/pki/rpm-gpg/RPM-GPG-KEY-influxdata
+    state: present
+  become: true
+  when: ansible_facts['os_family'] == 'RedHat'
+
+- name: Add InfluxData yum/dnf repository
+  ansible.builtin.yum_repository:
+    name: influxdata
+    description: InfluxData Repository
+    baseurl: "{{ telegraf_repo_baseurl }}"
+    gpgkey: "file:///etc/pki/rpm-gpg/RPM-GPG-KEY-influxdata"
+    gpgcheck: true
+    enabled: true
+  become: true
+  when: ansible_facts['os_family'] == 'RedHat'
+
+# ── Install Telegraf ──────────────────────────────────────────────────────────
+
+- name: Install Telegraf
+  ansible.builtin.package:
+    name: "{{ telegraf_package }}"
+    state: latest  # noqa package-latest
+  become: true
+
+# ── Deploy configuration ──────────────────────────────────────────────────────
+
+- name: Deploy Telegraf configuration
+  ansible.builtin.template:
+    src: telegraf.conf.linux.j2
+    dest: /etc/telegraf/telegraf.conf
+    owner: root
+    group: telegraf
+    mode: '0640'
+  become: true
+  notify: Restart telegraf
+
+# ── Manage systemd service ────────────────────────────────────────────────────
+
+- name: Manage Telegraf systemd service
+  ansible.builtin.systemd:
+    name: telegraf
+    state: "{{ 'started' if telegraf_service_enabled else 'stopped' }}"
+    enabled: "{{ telegraf_service_enabled }}"
+    daemon_reload: true
+  become: true
