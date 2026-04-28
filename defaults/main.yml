@@ -33,3 +33,15 @@ telegraf_outputs: []
 #         commands = ["/usr/local/bin/my-collector.sh"]
 #         data_format = "influx"
 telegraf_inputs_extra: []
+
+# ── Windows-only options ──────────────────────────────────────────────────────
+
+# Pin a specific Telegraf version on Windows (e.g. "1.38.3"). When left empty,
+# the role queries the GitHub releases API to discover the latest tag and
+# installs that. Pinning is recommended for air-gapped environments or when
+# the control node cannot reach api.github.com.
+telegraf_win_version: ""
+
+# Whether to remove the downloaded ZIP and extract directory after a
+# successful Windows install. Set to false to keep them for debugging.
+telegraf_win_cleanup: true

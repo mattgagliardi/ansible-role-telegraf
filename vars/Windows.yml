@@ -3,3 +3,7 @@
 
 telegraf_win_install_dir: "C:\\Program Files\\InfluxData\\telegraf"
 telegraf_win_config_file: "C:\\Program Files\\InfluxData\\telegraf\\telegraf.conf"
+
+# Upstream artifact URL pattern. {ver} is replaced by telegraf_win_version at
+# task time. InfluxData no longer publishes a Windows MSI; only the ZIP.
+telegraf_win_artifact_url_template: "https://dl.influxdata.com/telegraf/releases/telegraf-{ver}_windows_amd64.zip"

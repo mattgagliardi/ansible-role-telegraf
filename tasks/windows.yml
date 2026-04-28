@@ -1,7 +1,17 @@
 ---
 # tasks/windows.yml — Windows-specific Telegraf tasks
+#
+# Install path: download the official ZIP archive from dl.influxdata.com,
+# extract it, copy telegraf.exe into telegraf_win_install_dir, and register
+# the Windows service via "telegraf.exe --service install".
+#
+# Idempotency: the role records the version of any pre-existing telegraf.exe
+# and skips download/extract/copy when it already matches the requested
+# version. Upgrades stop the service, swap the binary, then let the service
+# task restart it.
 
-# Step A: Determine the latest Telegraf version
+# ── Step A: Determine target Telegraf version ────────────────────────────────
+
 - name: Query GitHub releases API for latest Telegraf version
   ansible.builtin.uri:
     url: "https://api.github.com/repos/influxdata/telegraf/releases/latest"
@@ -11,36 +21,158 @@
   register: _telegraf_github_release
   delegate_to: localhost
   run_once: true
-  no_log: false
+  when: telegraf_win_version | length == 0
 
-- name: Set telegraf_win_version fact
+- name: Set telegraf_win_version fact (latest from GitHub)
   ansible.builtin.set_fact:
     telegraf_win_version: "{{ _telegraf_github_release.json.tag_name | regex_replace('^v', '') }}"
+  when: telegraf_win_version | length == 0
 
-# Step B: Download the MSI
-- name: Download Telegraf MSI installer
+- name: Show resolved Telegraf version
+  ansible.builtin.debug:
+    msg: "Targeting Telegraf {{ telegraf_win_version }} on Windows"
+
+# ── Step B: Ensure install and staging directories exist ─────────────────────
+
+- name: Ensure Telegraf install directory exists
+  ansible.windows.win_file:
+    path: "{{ telegraf_win_install_dir }}"
+    state: directory
+
+- name: Ensure Telegraf staging directory exists
+  ansible.windows.win_file:
+    path: "C:\\Windows\\Temp\\telegraf-{{ telegraf_win_version }}"
+    state: directory
+
+# ── Step C: Detect any already-installed telegraf.exe and its version ────────
+
+- name: Stat existing telegraf.exe
+  ansible.windows.win_stat:
+    path: "{{ telegraf_win_install_dir }}\\telegraf.exe"
+  register: telegraf_win_exe_stat
+
+- name: Capture installed Telegraf version
+  ansible.windows.win_command: '"{{ telegraf_win_install_dir }}\telegraf.exe" --version'
+  register: telegraf_win_version_probe
+  changed_when: false
+  failed_when: false
+  when: telegraf_win_exe_stat.stat.exists
+
+- name: Set telegraf_win_installed_version fact
+  ansible.builtin.set_fact:
+    telegraf_win_installed_version: >-
+      {{ (telegraf_win_version_probe.stdout | default('')
+          | regex_search('Telegraf\s+([0-9][^\s]*)', '\\1')
+          | first
+          | default(''))
+         if telegraf_win_exe_stat.stat.exists else '' }}
+
+- name: Set telegraf_win_needs_install fact
+  ansible.builtin.set_fact:
+    telegraf_win_needs_install: "{{ telegraf_win_installed_version != telegraf_win_version }}"
+
+- name: Report install decision
+  ansible.builtin.debug:
+    msg: >-
+      installed='{{ telegraf_win_installed_version }}'
+      target='{{ telegraf_win_version }}'
+      needs_install={{ telegraf_win_needs_install }}
+
+# ── Step D: Download ZIP archive ─────────────────────────────────────────────
+
+- name: Download Telegraf ZIP archive
   ansible.windows.win_get_url:
-    url: "https://dl.influxdata.com/telegraf/releases/telegraf-{{ telegraf_win_version }}_windows_amd64.msi"
-    dest: "C:\\Windows\\Temp\\telegraf.msi"
+    url: "{{ telegraf_win_artifact_url_template | replace('{ver}', telegraf_win_version) }}"
+    dest: "C:\\Windows\\Temp\\telegraf-{{ telegraf_win_version }}.zip"
     force: false
+  when: telegraf_win_needs_install
 
-# Step C: Install the MSI
-- name: Install Telegraf via MSI
-  ansible.windows.win_package:
-    path: "C:\\Windows\\Temp\\telegraf.msi"
-    state: present
-    creates_service: telegraf
+# ── Step E: Extract ZIP via Expand-Archive (built-in PowerShell) ─────────────
 
-# Step D: Deploy config
+- name: Extract Telegraf ZIP
+  ansible.windows.win_powershell:
+    parameters:
+      ZipPath: "C:\\Windows\\Temp\\telegraf-{{ telegraf_win_version }}.zip"
+      Destination: "C:\\Windows\\Temp\\telegraf-{{ telegraf_win_version }}"
+    script: |
+      param([string]$ZipPath, [string]$Destination)
+      $ErrorActionPreference = 'Stop'
+      Expand-Archive -LiteralPath $ZipPath -DestinationPath $Destination -Force
+      $exe = Get-ChildItem -Path $Destination -Filter 'telegraf.exe' -Recurse |
+             Select-Object -First 1
+      if (-not $exe) {
+        throw "telegraf.exe not found after extracting $ZipPath"
+      }
+      $Ansible.Result.exe_path = $exe.FullName
+  register: telegraf_win_extract
+  when: telegraf_win_needs_install
+  changed_when: telegraf_win_needs_install
+
+# ── Step F: Stop service before swapping binary (upgrade case only) ──────────
+
+- name: Stop Telegraf service before binary swap
+  ansible.windows.win_service:
+    name: telegraf
+    state: stopped
+  when:
+    - telegraf_win_needs_install
+    - telegraf_win_installed_version | length > 0
+  failed_when: false
+
+# ── Step G: Copy telegraf.exe into the install directory ─────────────────────
+
+- name: Copy telegraf.exe into install directory
+  ansible.windows.win_copy:
+    src: "{{ telegraf_win_extract.result.exe_path }}"
+    dest: "{{ telegraf_win_install_dir }}\\telegraf.exe"
+    remote_src: true
+  when: telegraf_win_needs_install
+
+# ── Step H: Register the service if it does not already exist ────────────────
+
+- name: Check whether the telegraf service is already registered
+  ansible.windows.win_service:
+    name: telegraf
+  register: telegraf_win_existing_service
+
+- name: Register telegraf as a Windows service
+  ansible.windows.win_command: >-
+    "{{ telegraf_win_install_dir }}\telegraf.exe"
+    --service install
+    --config "{{ telegraf_win_config_file }}"
+  when: not telegraf_win_existing_service.exists
+  changed_when: true
+
+# ── Step I: Deploy configuration ─────────────────────────────────────────────
+
 - name: Deploy Telegraf configuration
   ansible.windows.win_template:
     src: telegraf.conf.windows.j2
     dest: "{{ telegraf_win_config_file }}"
   notify: "Restart telegraf on Windows"
 
-# Step E: Manage the service
+# ── Step J: Manage the service ───────────────────────────────────────────────
+
 - name: Manage Telegraf Windows service
   ansible.windows.win_service:
     name: telegraf
     start_mode: "{{ 'auto' if telegraf_service_enabled else 'disabled' }}"
     state: "{{ 'started' if telegraf_service_enabled else 'stopped' }}"
+
+# ── Step K: Optional cleanup of staging artifacts ────────────────────────────
+
+- name: Clean up Telegraf ZIP archive
+  ansible.windows.win_file:
+    path: "C:\\Windows\\Temp\\telegraf-{{ telegraf_win_version }}.zip"
+    state: absent
+  when:
+    - telegraf_win_needs_install
+    - telegraf_win_cleanup | bool
+
+- name: Clean up Telegraf extract directory
+  ansible.windows.win_file:
+    path: "C:\\Windows\\Temp\\telegraf-{{ telegraf_win_version }}"
+    state: absent
+  when:
+    - telegraf_win_needs_install
+    - telegraf_win_cleanup | bool
