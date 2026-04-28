@@ -24,15 +24,19 @@ Installs and configures the [Telegraf](https://www.influxdata.com/time-series-pl
 
 All variables are defined in `defaults/main.yml` and can be overridden in the calling playbook or inventory.
 
-| Variable                        | Default | Description                                                                                                                                                                                      |
-| ------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `telegraf_service_enabled`      | `true`  | Whether the Telegraf service is enabled and started at boot. Set to `false` to install without enabling.                                                                                         |
-| `telegraf_agent_interval`       | `"10s"` | How often Telegraf collects metrics.                                                                                                                                                             |
-| `telegraf_agent_flush_interval` | `"10s"` | How often Telegraf flushes metrics to outputs.                                                                                                                                                   |
-| `telegraf_outputs`              | `[]`    | List of output plugin configuration dicts, populated by the caller (see example below).                                                                                                          |
-| `telegraf_inputs_extra`         | `[]`    | Additional input plugin dicts the caller can append to the default inputs.                                                                                                                       |
-| `telegraf_win_version`          | `""`    | (Windows only) Pin a specific Telegraf version, e.g. `"1.38.3"`. When empty, the role queries `api.github.com` for the latest release tag. Pin this to remove the implicit dependency on GitHub. |
-| `telegraf_win_cleanup`          | `true`  | (Windows only) Remove the downloaded ZIP and extract directory after a successful install. Set `false` to keep them for debugging.                                                               |
+| Variable                        | Default      | Description                                                                                                                                                                                      |
+| ------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `telegraf_service_enabled`      | `true`       | Whether the Telegraf service is enabled and started at boot. Set to `false` to install without enabling.                                                                                         |
+| `telegraf_agent_interval`       | `"10s"`      | How often Telegraf collects metrics.                                                                                                                                                             |
+| `telegraf_agent_flush_interval` | `"10s"`      | How often Telegraf flushes metrics to outputs.                                                                                                                                                   |
+| `telegraf_influxdb_v3_enabled`  | `false`      | When `true`, render an `[[outputs.influxdb_v3]]` block in the generated config using the variables below.                                                                                        |
+| `telegraf_influxdb_v3_urls`     | `[]`         | List of InfluxDB v3 endpoint URLs (e.g. `["http://influxdb.example.com:8181"]`).                                                                                                                 |
+| `telegraf_influxdb_v3_database` | `"telegraf"` | InfluxDB v3 database name (replaces the v2 `bucket` concept).                                                                                                                                    |
+| `telegraf_influxdb_v3_token`    | `""`         | InfluxDB v3 auth token. Leave empty when the receiving instance has authentication disabled (its default state) — the role then omits the `token =` line entirely.                               |
+| `telegraf_outputs`              | `[]`         | List of additional output plugin configuration dicts, populated by the caller (see example below). Rendered in addition to any first-class InfluxDB v3 output.                                   |
+| `telegraf_inputs_extra`         | `[]`         | Additional input plugin dicts the caller can append to the default inputs.                                                                                                                       |
+| `telegraf_win_version`          | `""`         | (Windows only) Pin a specific Telegraf version, e.g. `"1.38.3"`. When empty, the role queries `api.github.com` for the latest release tag. Pin this to remove the implicit dependency on GitHub. |
+| `telegraf_win_cleanup`          | `true`       | (Windows only) Remove the downloaded ZIP and extract directory after a successful install. Set `false` to keep them for debugging.                                                               |
 
 ### OS-family variables (not normally overridden)
 
@@ -66,19 +70,21 @@ These are set automatically by including `vars/Debian.yml` or `vars/RedHat.yml`:
       vars:
         telegraf_agent_interval: "30s"
         telegraf_agent_flush_interval: "30s"
-        telegraf_outputs:
-          - plugin: influxdb_v2
-            config: |
-              urls = ["http://influxdb.example.com:8086"]
-              token = "{{ '{{' }} vault_influxdb_token {{ '}}' }}"
-              organization = "myorg"
-              bucket = "telegraf"
+        telegraf_influxdb_v3_enabled: true
+        telegraf_influxdb_v3_urls:
+          - "http://influxdb.example.com:8181"
+        telegraf_influxdb_v3_database: "telegraf"
+        # Omit telegraf_influxdb_v3_token (or leave it as "") when the
+        # receiving InfluxDB v3 instance has authentication disabled.
+        telegraf_influxdb_v3_token: "{{ '{{' }} vault_influxdb_token {{ '}}' }}"
         telegraf_inputs_extra:
           - |
             [[inputs.exec]]
               commands = ["/usr/local/bin/my-collector.sh"]
               data_format = "influx"
 ```
+
+> **Auth-disabled receivers:** InfluxDB v3 ships with authentication disabled by default. In that scenario, leave `telegraf_influxdb_v3_token` unset (or empty) and the role will omit the `token =` line from the rendered config.
 
 ---
 

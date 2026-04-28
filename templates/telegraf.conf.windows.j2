@@ -19,14 +19,22 @@
 ###############################################################################
 # OUTPUTS
 ###############################################################################
-{% if telegraf_outputs | length > 0 %}
+{% if telegraf_influxdb_v3_enabled %}
+[[outputs.influxdb_v3]]
+  urls = {{ telegraf_influxdb_v3_urls | to_json }}
+  database = "{{ telegraf_influxdb_v3_database }}"
+{% if telegraf_influxdb_v3_token | length > 0 %}
+  token = "{{ telegraf_influxdb_v3_token }}"
+{% endif %}
+{% endif %}
 {% for output in telegraf_outputs %}
 [[outputs.{{ output.plugin }}]]
 {{ output.config | indent(2, first=true) }}
 {% endfor %}
-{% else %}
+{% if not telegraf_influxdb_v3_enabled and telegraf_outputs | length == 0 %}
 # No outputs configured — writing to NUL so telegraf starts cleanly.
-# Override telegraf_outputs in your playbook to ship metrics to a real backend.
+# Override telegraf_outputs (or set telegraf_influxdb_v3_enabled) in your
+# playbook to ship metrics to a real backend.
 [[outputs.file]]
   files = ["NUL"]
 {% endif %}

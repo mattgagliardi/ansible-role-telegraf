@@ -11,18 +11,29 @@ telegraf_agent_interval: "10s"
 # How often the agent flushes metrics to outputs (default: 10s).
 telegraf_agent_flush_interval: "10s"
 
-# List of output plugin dicts. Each dict has keys:
+# ── InfluxDB v3 output (first-class) ──────────────────────────────────────────
+# When telegraf_influxdb_v3_enabled is true, the role renders an
+# [[outputs.influxdb_v3]] block in the generated telegraf.conf using the
+# variables below. Leave telegraf_influxdb_v3_token empty when the receiving
+# InfluxDB v3 instance has authentication disabled (its default state) — in
+# that case no `token =` line is emitted.
+telegraf_influxdb_v3_enabled: false
+telegraf_influxdb_v3_urls: []
+telegraf_influxdb_v3_database: "telegraf"
+telegraf_influxdb_v3_token: ""
+
+# Additional output plugin dicts. Each dict has keys:
 #   plugin: <telegraf plugin name>
 #   config: <raw TOML config lines as a string>
-# If empty, telegraf writes to /dev/null so the service starts cleanly.
+# If both this list is empty AND telegraf_influxdb_v3_enabled is false,
+# telegraf writes to /dev/null so the service starts cleanly.
 # Example:
 #   telegraf_outputs:
-#     - plugin: influxdb_v2
+#     - plugin: influxdb_v3
 #       config: |
-#         urls = ["https://influxdb.example.com:8086"]
-#         token = "mytoken"
-#         organization = "myorg"
-#         bucket = "telegraf"
+#         urls = ["https://influxdb.example.com:8181"]
+#         database = "telegraf"
+#         # token = "mytoken"   # omit entirely when auth is disabled
 telegraf_outputs: []
 
 # Additional input plugin blocks (raw TOML strings) appended after the default set.
