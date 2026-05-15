@@ -62,8 +62,7 @@
   ansible.builtin.set_fact:
     telegraf_win_installed_version: >-
       {{ (telegraf_win_version_probe.stdout | default('')
-          | regex_search('Telegraf\s+([0-9][^\s]*)', 1)
-          | first
+          | regex_search('Telegraf\s+([0-9][^\s]*)')
           | default(''))
          if telegraf_win_exe_stat.stat.exists else '' }}
 
