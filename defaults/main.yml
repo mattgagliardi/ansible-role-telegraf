@@ -21,6 +21,7 @@ telegraf_influxdb_v3_enabled: false
 telegraf_influxdb_v3_urls: []
 telegraf_influxdb_v3_database: "telegraf"
 telegraf_influxdb_v3_token: ""
+telegraf_influxdb_v3_insecure_skip_verify: true
 
 # Additional output plugin dicts. Each dict has keys:
 #   plugin: <telegraf plugin name>

@@ -32,6 +32,7 @@ All variables are defined in `defaults/main.yml` and can be overridden in the ca
 | `telegraf_influxdb_v3_enabled`  | `false`      | When `true`, render an `[[outputs.influxdb_v3]]` block in the generated config using the variables below.                                                                                        |
 | `telegraf_influxdb_v3_urls`     | `[]`         | List of InfluxDB v3 endpoint URLs (e.g. `["http://influxdb.example.com:8181"]`).                                                                                                                 |
 | `telegraf_influxdb_v3_database` | `"telegraf"` | InfluxDB v3 database name (replaces the v2 `bucket` concept).                                                                                                                                    |
+| `telegraf_influxdb_v3_insecure_skip_verify` | `true` | Whether Telegraf skips TLS certificate verification for the InfluxDB v3 endpoint. Keep `true` for self-signed/dev certs; set `false` in production with valid certs. |
 | `telegraf_influxdb_v3_token`    | `""`         | InfluxDB v3 auth token. Leave empty when the receiving instance has authentication disabled (its default state) — the role then omits the `token =` line entirely.                               |
 | `telegraf_outputs`              | `[]`         | List of additional output plugin configuration dicts, populated by the caller (see example below). Rendered in addition to any first-class InfluxDB v3 output.                                   |
 | `telegraf_inputs_extra`         | `[]`         | Additional input plugin dicts the caller can append to the default inputs.                                                                                                                       |
@@ -74,6 +75,7 @@ These are set automatically by including `vars/Debian.yml` or `vars/RedHat.yml`:
         telegraf_influxdb_v3_urls:
           - "http://influxdb.example.com:8181"
         telegraf_influxdb_v3_database: "telegraf"
+        telegraf_influxdb_v3_insecure_skip_verify: true
         # Omit telegraf_influxdb_v3_token (or leave it as "") when the
         # receiving InfluxDB v3 instance has authentication disabled.
         telegraf_influxdb_v3_token: "{{ '{{' }} vault_influxdb_token {{ '}}' }}"
@@ -97,3 +99,5 @@ MIT
 ## Author
 
 [mattgagliardi](https://github.com/mattgagliardi)
+
+Test to force CI run

@@ -23,6 +23,7 @@
 [[outputs.influxdb_v3]]
   urls = {{ telegraf_influxdb_v3_urls | to_json }}
   database = "{{ telegraf_influxdb_v3_database }}"
+  insecure_skip_verify = {{ telegraf_influxdb_v3_insecure_skip_verify | to_json }}
 {% if telegraf_influxdb_v3_token | length > 0 %}
   token = "{{ telegraf_influxdb_v3_token }}"
 {% endif %}
