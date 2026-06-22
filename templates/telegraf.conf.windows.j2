@@ -44,6 +44,31 @@
 # INPUTS — Windows performance counters
 ###############################################################################
 [[inputs.win_perf_counters]]
+UseWildcardsExpansion = true
+
+  [[inputs.win_perf_counters.object]]
+    ObjectName = "GPU Adapter Memory"
+    Counters = ["*"]
+    Instances = ["*"]
+    Measurement = "win_gpu_adapter_mem"
+
+  [[inputs.win_perf_counters.object]]
+    ObjectName = "GPU Engine"
+    Counters = ["*"]
+    Instances = ["*3D","*Cuda","*Copy"]
+    Measurement = "win_gpu_engine"
+
+  [[inputs.win_perf_counters.object]]
+    ObjectName = "GPU Process Memory"
+    Counters = ["Dedicated Usage","Total Committed"]
+    Instances = ["*"]
+    Measurement = "win_gpu_process_mem"
+
+  [[inputs.win_perf_counters.object]]
+    ObjectName = "NVIDIA GPU"
+    Counters = ["% FB Usage","% GPU Memory Usage", "% GPU Usage", "Available Memory MB"]
+    Instances = ["*"]
+    Measurement = "nvidia_gpu"
 
   [[inputs.win_perf_counters.object]]
     ObjectName = "Processor"
