@@ -34,10 +34,40 @@ All variables are defined in `defaults/main.yml` and can be overridden in the ca
 | `telegraf_influxdb_v3_database` | `"telegraf"` | InfluxDB v3 database name (replaces the v2 `bucket` concept).                                                                                                                                    |
 | `telegraf_influxdb_v3_insecure_skip_verify` | `true` | Whether Telegraf skips TLS certificate verification for the InfluxDB v3 endpoint. Keep `true` for self-signed/dev certs; set `false` in production with valid certs. |
 | `telegraf_influxdb_v3_token`    | `""`         | InfluxDB v3 auth token. Leave empty when the receiving instance has authentication disabled (its default state) — the role then omits the `token =` line entirely.                               |
+| `telegraf_influxdb_v3_retention_enabled` | `true` | Enable post-start retention configuration workflow for the InfluxDB v3 database. |
+| `telegraf_influxdb_v3_retention_duration` | `"7d"` | Retention period applied to the target database. |
+| `telegraf_influxdb_v3_retention_wait_extra_seconds` | `3` | Extra seconds added to `telegraf_agent_interval` before API checks begin. |
+| `telegraf_influxdb_v3_retention_check_database_presence` | `true` | Poll the database list API and wait until the target database appears before setting retention. |
+| `telegraf_influxdb_v3_retention_check_retries` | `10` | Maximum database list polling attempts. |
+| `telegraf_influxdb_v3_retention_check_delay` | `2` | Seconds between database list polling attempts. |
+| `telegraf_influxdb_v3_retention_http_timeout` | `10` | HTTP timeout in seconds for retention workflow API calls. |
+| `telegraf_influxdb_v3_retention_best_effort` | `true` | When true, warns and continues if database-check or retention API calls fail; when false, fails the play. |
 | `telegraf_outputs`              | `[]`         | List of additional output plugin configuration dicts, populated by the caller (see example below). Rendered in addition to any first-class InfluxDB v3 output.                                   |
 | `telegraf_inputs_extra`         | `[]`         | Additional input plugin dicts the caller can append to the default inputs.                                                                                                                       |
 | `telegraf_win_version`          | `""`         | (Windows only) Pin a specific Telegraf version, e.g. `"1.38.3"`. When empty, the role queries `api.github.com` for the latest release tag. Pin this to remove the implicit dependency on GitHub. |
 | `telegraf_win_cleanup`          | `true`       | (Windows only) Remove the downloaded ZIP and extract directory after a successful install. Set `false` to keep them for debugging.                                                               |
+
+### Automatic Database Retention Configuration
+
+When all of the following are true, the role applies retention automatically:
+
+- `telegraf_service_enabled: true`
+- `telegraf_influxdb_v3_enabled: true`
+- `telegraf_influxdb_v3_retention_enabled: true`
+- `telegraf_influxdb_v3_urls` contains at least one URL
+
+Execution order:
+
+1. Start/restart Telegraf and flush pending handlers.
+2. Wait for `telegraf_agent_interval + telegraf_influxdb_v3_retention_wait_extra_seconds`.
+3. Query `GET <first_url>/api/v3/configure/database?format=json` until the target database name appears.
+4. Call `POST <first_url>/api/v3/configure/database/retention_period?db=<db>&duration=<duration>`.
+
+Notes:
+
+- The API base URL is the first entry in `telegraf_influxdb_v3_urls`.
+- `telegraf_agent_interval` must be seconds-based (for example `"10s"`).
+- If `telegraf_influxdb_v3_retention_best_effort` is true, failures in the check/update path log warnings and do not fail the play.
 
 ### OS-family variables (not normally overridden)
 

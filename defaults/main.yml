@@ -23,6 +23,18 @@ telegraf_influxdb_v3_database: "telegraf"
 telegraf_influxdb_v3_token: ""
 telegraf_influxdb_v3_insecure_skip_verify: true
 
+# Configure database retention after Telegraf performs its first write.
+# The role waits for telegraf_agent_interval + telegraf_influxdb_v3_retention_wait_extra_seconds,
+# optionally confirms database presence via GET, then POSTs retention_period.
+telegraf_influxdb_v3_retention_enabled: true
+telegraf_influxdb_v3_retention_duration: "7d"
+telegraf_influxdb_v3_retention_wait_extra_seconds: 3
+telegraf_influxdb_v3_retention_check_database_presence: true
+telegraf_influxdb_v3_retention_check_retries: 10
+telegraf_influxdb_v3_retention_check_delay: 2
+telegraf_influxdb_v3_retention_http_timeout: 10
+telegraf_influxdb_v3_retention_best_effort: true
+
 # Additional output plugin dicts. Each dict has keys:
 #   plugin: <telegraf plugin name>
 #   config: <raw TOML config lines as a string>

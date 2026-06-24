@@ -158,6 +158,93 @@
     start_mode: "{{ 'auto' if telegraf_service_enabled else 'disabled' }}"
     state: "{{ 'started' if telegraf_service_enabled else 'stopped' }}"
 
+- name: Flush handlers before retention configuration (Windows)
+  ansible.builtin.meta: flush_handlers
+  when:
+    - telegraf_service_enabled | bool
+    - telegraf_influxdb_v3_enabled | bool
+    - telegraf_influxdb_v3_retention_enabled | bool
+    - telegraf_influxdb_v3_urls | length > 0
+
+- name: Configure InfluxDB v3 database retention (Windows)
+  when:
+    - telegraf_service_enabled | bool
+    - telegraf_influxdb_v3_enabled | bool
+    - telegraf_influxdb_v3_retention_enabled | bool
+    - telegraf_influxdb_v3_urls | length > 0
+  block:
+    - name: Assert telegraf_agent_interval is in seconds format
+      ansible.builtin.assert:
+        that:
+          - telegraf_agent_interval is match('^[0-9]+s$')
+        fail_msg: "telegraf_agent_interval must be in seconds format like '10s'"
+
+    - name: Build retention API settings
+      ansible.builtin.set_fact:
+        telegraf_retention_wait_seconds: "{{ (telegraf_agent_interval | regex_replace('s$', '') | int) + (telegraf_influxdb_v3_retention_wait_extra_seconds | int) }}"
+        telegraf_retention_api_url: "{{ telegraf_influxdb_v3_urls[0] | regex_replace('/+$', '') }}"
+        telegraf_retention_api_headers: "{{ {'Accept': 'application/json'} | combine((telegraf_influxdb_v3_token | length > 0) | ternary({'Authorization': 'Bearer ' ~ telegraf_influxdb_v3_token}, {})) }}"
+
+    - name: Wait for first Telegraf write window before retention update
+      ansible.builtin.pause:
+        seconds: "{{ telegraf_retention_wait_seconds }}"
+
+    - name: Check database presence via InfluxDB v3 API
+      ansible.windows.win_uri:
+        url: "{{ telegraf_retention_api_url }}/api/v3/configure/database?format=json"
+        method: GET
+        headers: "{{ telegraf_retention_api_headers }}"
+        return_content: true
+        validate_certs: "{{ not (telegraf_influxdb_v3_insecure_skip_verify | bool) }}"
+        timeout: "{{ telegraf_influxdb_v3_retention_http_timeout | int }}"
+      register: telegraf_retention_db_check
+      retries: "{{ telegraf_influxdb_v3_retention_check_retries | int }}"
+      delay: "{{ telegraf_influxdb_v3_retention_check_delay | int }}"
+      until: >-
+        telegraf_retention_db_check.status_code == 200 and
+        (telegraf_retention_db_check.content | default('') is search('"' ~ (telegraf_influxdb_v3_database | regex_escape) ~ '"'))
+      changed_when: false
+      when: telegraf_influxdb_v3_retention_check_database_presence | bool
+      ignore_errors: "{{ telegraf_influxdb_v3_retention_best_effort | bool }}"
+
+    - name: Warn when database presence check does not confirm the target database
+      ansible.builtin.debug:
+        msg: >-
+          Unable to confirm presence of database '{{ telegraf_influxdb_v3_database }}' via
+          {{ telegraf_retention_api_url }}/api/v3/configure/database?format=json.
+          Skipping retention update because best-effort mode is enabled.
+      when:
+        - telegraf_influxdb_v3_retention_check_database_presence | bool
+        - telegraf_retention_db_check is failed
+
+    - name: Set retention period on InfluxDB v3 database
+      ansible.windows.win_uri:
+        url: "{{ telegraf_retention_api_url }}/api/v3/configure/database/retention_period?db={{ telegraf_influxdb_v3_database | urlencode }}&duration={{ telegraf_influxdb_v3_retention_duration | urlencode }}"
+        method: POST
+        headers: "{{ telegraf_retention_api_headers }}"
+        return_content: true
+        status_code:
+          - 200
+          - 201
+          - 204
+        validate_certs: "{{ not (telegraf_influxdb_v3_insecure_skip_verify | bool) }}"
+        timeout: "{{ telegraf_influxdb_v3_retention_http_timeout | int }}"
+      register: telegraf_retention_set
+      changed_when: false
+      when:
+        - not (telegraf_influxdb_v3_retention_check_database_presence | bool) or (telegraf_retention_db_check is not failed)
+      ignore_errors: "{{ telegraf_influxdb_v3_retention_best_effort | bool }}"
+
+    - name: Warn when retention update request fails in best-effort mode
+      ansible.builtin.debug:
+        msg: >-
+          Failed to set retention '{{ telegraf_influxdb_v3_retention_duration }}' on database
+          '{{ telegraf_influxdb_v3_database }}' at {{ telegraf_retention_api_url }}.
+          Continuing because telegraf_influxdb_v3_retention_best_effort is enabled.
+      when:
+        - telegraf_retention_set is defined
+        - telegraf_retention_set is failed
+
 # ── Step K: Optional cleanup of staging artifacts ────────────────────────────
 
 - name: Clean up Telegraf ZIP archive
